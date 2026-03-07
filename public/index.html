@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXUS Terminal</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #070b11;
+    --surface:   #0c1219;
+    --panel:     #111827;
+    --border:    #1d2738;
+    --border2:   #151e2d;
+    --accent:    #e8b84b;
+    --accent-dim:rgba(232,184,75,0.07);
+    --up:        #26a69a;
+    --up-bg:     rgba(38,166,154,0.07);
+    --down:      #ef5350;
+    --down-bg:   rgba(239,83,80,0.07);
+    --text:      #c9d3e0;
+    --text-mid:  #7a8fa8;
+    --text-dim:  #3d5068;
+    --blue:      #4f8ef7;
+    --purple:    #9b7fe8;
+    --orange:    #f5a623;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--mono); }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── LAYOUT ── */
+  #app { display: flex; flex-direction: column; height: 100vh; }
+
+  #topbar {
+    height: 46px; flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 14px; gap: 0;
+    z-index: 100;
+  }
+
+  #body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 186px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  #market-tabs {
+    display: flex; border-bottom: 1px solid var(--border);
+  }
+  .mtab {
+    flex: 1; padding: 7px 0; text-align: center;
+    font-size: 9px; letter-spacing: 1px;
+    color: var(--text-dim); cursor: pointer; border: none;
+    background: transparent; font-family: var(--mono);
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .mtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  #search-wrap { padding: 8px; border-bottom: 1px solid var(--border2); }
+  #search {
+    width: 100%; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 3px; padding: 5px 8px; color: var(--text);
+    font-family: var(--mono); font-size: 10px; outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  #search::placeholder { color: var(--text-dim); }
+
+  #asset-list { flex: 1; overflow-y: auto; }
+  .asset-item {
+    padding: 7px 10px; cursor: pointer;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--border2);
+    transition: background .1s;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .asset-item:hover { background: rgba(255,255,255,0.02); }
+  .asset-item.active { border-left-color: var(--accent); background: var(--accent-dim); }
+  .asset-ticker { font-size: 11px; font-weight: 600; color: var(--text); }
+  .asset-item.active .asset-ticker { color: var(--accent); }
+  .asset-name { font-size: 8.5px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+  .asset-price { font-size: 9.5px; text-align: right; }
+  .asset-change { font-size: 8px; margin-top: 2px; }
+  .up { color: var(--up); }
+  .dn { color: var(--down); }
+
+  /* ── CENTER ── */
+  #center { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+  #chart-toolbar {
+    height: 38px; flex-shrink: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px; gap: 10;
+  }
+  #asset-title { font-size: 13px; font-weight: 600; }
+  #asset-subtitle { font-size: 10px; color: var(--text-mid); margin-left: 8px; }
+  .source-badge {
+    font-size: 8px; padding: 2px 6px; border-radius: 2px;
+    border: 1px solid; letter-spacing: 0.5px; margin-left: 8px;
+  }
+
+  #interval-tabs { display: flex; gap: 2px; margin-left: auto; }
+  .ivtab {
+    padding: 3px 8px; font-size: 9px; font-family: var(--mono);
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); cursor: pointer; border-radius: 2px;
+    transition: all .12s;
+  }
+  .ivtab.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .ivtab:hover { color: var(--text); }
+
+  .ind-toggle {
+    padding: 3px 9px; font-size: 9px; font-family: var(--mono);
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); cursor: pointer; border-radius: 2px;
+    transition: all .12s; margin-left: 4px;
+  }
+  .ind-toggle.on { border-color: currentColor; }
+
+  /* ── CHARTS ── */
+  #charts-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+  #main-chart-container {
+    flex: 1; min-height: 0; position: relative;
+    cursor: crosshair;
+  }
+  #main-chart { width: 100%; height: 100%; }
+
+  #sub-tabs-bar {
+    height: 30px; flex-shrink: 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px; gap: 0;
+  }
+  .subtab {
+    padding: 0 14px; height: 30px; font-size: 9px; letter-spacing: 1.5px;
+    font-family: var(--mono); background: transparent; border: none;
+    border-bottom: 2px solid transparent; color: var(--text-dim);
+    cursor: pointer; text-transform: uppercase; transition: all .12s;
+  }
+  .subtab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  #sub-chart-container {
+    flex: 0 0 160px; flex-shrink: 0;
+    border-top: 1px solid var(--border); position: relative;
+  }
+  #sub-chart { width: 100%; height: 100%; }
+
+  /* ── OVERLAY STATE ── */
+  .chart-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: var(--bg); z-index: 10; gap: 12px;
+    font-size: 11px; color: var(--text-mid);
+  }
+  .spinner { animation: spin .8s linear infinite; display: inline-block; font-size: 18px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RIGHT PANEL ── */
+  #right-panel {
+    width: 256px; flex-shrink: 0;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .rp-section { border-bottom: 1px solid var(--border); padding: 12px; flex-shrink: 0; }
+  .rp-label { font-size: 8px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 10px; }
+
+  .ind-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .ind-cell {
+    background: var(--panel); border: 1px solid var(--border2);
+    border-radius: 3px; padding: 7px 8px;
+  }
+  .ind-cell-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 4px; }
+  .ind-cell-value { font-size: 11px; font-weight: 600; }
+  .ind-cell-sub   { font-size: 7.5px; margin-top: 3px; opacity: 0.75; }
+
+  .sr-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; border-bottom: 1px solid var(--border2); font-size: 10px;
+  }
+  .sr-row:last-child { border-bottom: none; }
+  .sr-type { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--text-dim); }
+  .sr-bar { width: 3px; height: 12px; border-radius: 1px; }
+  .sr-pct { font-size: 8.5px; }
+
+  /* ── AI SECTION ── */
+  #ai-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px; }
+  #ai-label { font-size: 8px; letter-spacing: 2px; color: var(--accent); margin-bottom: 10px; flex-shrink: 0; }
+  #ai-run-btn {
+    width: 100%; padding: 10px; border: 1px solid var(--accent);
+    background: var(--accent-dim); color: var(--accent);
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 1px; cursor: pointer; border-radius: 3px;
+    transition: all .2s; flex-shrink: 0;
+  }
+  #ai-run-btn:hover { background: rgba(232,184,75,0.15); }
+  #ai-run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #ai-result { flex: 1; overflow-y: auto; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+
+  .ai-signal-block {
+    border-left: 3px solid; padding: 10px 12px; border-radius: 0 3px 3px 0;
+  }
+  .ai-signal-text { font-size: 22px; font-weight: 700; letter-spacing: 4px; }
+  .ai-signal-trend { font-size: 9px; margin-top: 3px; }
+  .confidence-bar-wrap { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .confidence-bar { flex: 1; height: 3px; background: var(--border); border-radius: 2px; }
+  .confidence-fill { height: 100%; border-radius: 2px; transition: width .5s; }
+  .confidence-pct { font-size: 10px; font-weight: 700; min-width: 32px; text-align: right; }
+
+  .ai-section-block { border-top: 1px solid var(--border); padding-top: 8px; }
+  .ai-section-title { font-size: 8px; letter-spacing: 1.5px; color: var(--text-dim); margin-bottom: 7px; }
+  .ai-summary { font-size: 10px; line-height: 1.7; color: var(--text); }
+
+  .levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 8px; }
+  .level-cell { background: var(--panel); border: 1px solid var(--border2); border-radius: 3px; padding: 6px 8px; }
+  .level-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; margin-bottom: 3px; }
+  .level-value { font-size: 11px; font-weight: 600; }
+
+  .conf-list .conf-item { display: flex; gap: 8px; font-size: 10px; padding: 3px 0; border-bottom: 1px solid var(--border2); color: var(--text); }
+  .conf-list .conf-item:last-child { border-bottom: none; }
+  .conf-plus { color: var(--up); flex-shrink: 0; }
+  .warn-plus { color: var(--down); flex-shrink: 0; }
+
+  .ai-idle { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); font-size: 10px; text-align: center; gap: 10px; line-height: 1.8; }
+  .ai-idle-icon { font-size: 24px; opacity: 0.2; }
+
+  /* ── TOPBAR PIECES ── */
+  .brand { display: flex; align-items: center; gap: 10px; padding-right: 16px; border-right: 1px solid var(--border); margin-right: 4px; }
+  .brand-logo {
+    width: 28px; height: 28px; border-radius: 4px;
+    background: linear-gradient(135deg, var(--accent), #b8791a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #070b11;
+  }
+  .brand-name { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 3px; }
+  .brand-sub  { font-size: 7px; color: var(--text-dim); letter-spacing: 2px; }
+
+  .top-market-tab {
+    height: 46px; padding: 0 14px; font-size: 10px;
+    font-family: var(--mono); background: transparent; border: none;
+    border-bottom: 2px solid transparent; color: var(--text-dim);
+    cursor: pointer; letter-spacing: 0.5px; transition: all .15s;
+  }
+  .top-market-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .top-market-tab:hover { color: var(--text); }
+
+  #ticker-info { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+  #tick-price { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+  #tick-change { font-size: 11px; margin-top: 2px; }
+  #tick-vol { font-size: 8.5px; color: var(--text-dim); text-align: right; }
+  #tick-vol-val { font-size: 10px; color: var(--text-mid); }
+  #tick-hl { font-size: 8.5px; color: var(--text-dim); }
+
+  .live-dot { animation: livepulse 2s ease-in-out infinite; width: 7px; height: 7px; border-radius: 50%; background: var(--up); }
+  @keyframes livepulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+  #tick-time { font-size: 8.5px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+
+  .reload-btn {
+    width: 30px; height: 30px; border-radius: 3px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-mid); font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .15s; margin-left: 8px;
+  }
+  .reload-btn:hover { border-color: var(--text-mid); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="brand">
+      <div class="brand-logo">N</div>
+      <div>
+        <div class="brand-name">NEXUS</div>
+        <div class="brand-sub">MARKET TERMINAL</div>
+      </div>
+    </div>
+
+    <button class="top-market-tab active" data-market="crypto">₿ KRİPTO <span style="color:var(--text-dim);font-size:8px">·30</span></button>
+    <button class="top-market-tab" data-market="us">$ S&P <span style="color:var(--text-dim);font-size:8px">·80</span></button>
+    <button class="top-market-tab" data-market="bist">₺ BİST <span style="color:var(--text-dim);font-size:8px">·50</span></button>
+    <button class="top-market-tab" data-market="emtia">⬡ EMTİA <span style="color:var(--text-dim);font-size:8px">·15</span></button>
+
+    <div id="ticker-info">
+      <div>
+        <div id="tick-price">—</div>
+        <div id="tick-change">—</div>
+      </div>
+      <div>
+        <div id="tick-vol">HACİM (24s)</div>
+        <div id="tick-vol-val">—</div>
+      </div>
+      <div id="tick-hl">—</div>
+      <div id="tick-time"><div class="live-dot"></div><span id="tick-ts">—</span></div>
+      <button class="reload-btn" id="reload-btn" title="Yenile">↻</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div id="body">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div id="market-tabs">
+        <button class="mtab active" data-market="crypto">₿</button>
+        <button class="mtab" data-market="us">$</button>
+        <button class="mtab" data-market="bist">₺</button>
+        <button class="mtab" data-market="emtia">⬡</button>
+      </div>
+      <div id="search-wrap">
+        <input id="search" placeholder="Ara..." autocomplete="off" spellcheck="false"/>
+      </div>
+      <div id="asset-list"></div>
+    </div>
+
+    <!-- CENTER -->
+    <div id="center">
+
+      <!-- Chart toolbar -->
+      <div id="chart-toolbar">
+        <span id="asset-title">—</span>
+        <span id="asset-subtitle">—</span>
+        <span id="source-badge" class="source-badge"></span>
+
+        <div id="interval-tabs">
+          <button class="ivtab" data-iv="5m">5D</button>
+          <button class="ivtab" data-iv="15m">15D</button>
+          <button class="ivtab" data-iv="1h">1S</button>
+          <button class="ivtab" data-iv="4h">4S</button>
+          <button class="ivtab active" data-iv="1d">1G</button>
+          <button class="ivtab" data-iv="1w">1H</button>
+        </div>
+
+        <button class="ind-toggle on" id="toggle-ema" style="color:var(--blue)" title="EMA 20/50">EMA</button>
+        <button class="ind-toggle" id="toggle-bb" style="color:var(--purple)" title="Bollinger Bantları">BB</button>
+        <button class="ind-toggle on" id="toggle-sr" style="color:var(--orange)" title="Destek/Direnç">S/R</button>
+      </div>
+
+      <!-- Charts -->
+      <div id="charts-wrap">
+        <div id="main-chart-container">
+          <div id="main-chart"></div>
+          <div class="chart-overlay" id="main-overlay">
+            <span class="spinner">◌</span>
+            <span>Varlık seçin</span>
+          </div>
+        </div>
+
+        <div id="sub-tabs-bar">
+          <button class="subtab active" data-sub="rsi">RSI</button>
+          <button class="subtab" data-sub="macd">MACD</button>
+          <button class="subtab" data-sub="volume">HACİM</button>
+          <span id="rsi-live" style="margin-left:auto;font-size:9px;color:var(--text-mid)"></span>
+        </div>
+
+        <div id="sub-chart-container">
+          <div id="sub-chart"></div>
+          <div class="chart-overlay" id="sub-overlay" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div id="right-panel">
+
+      <!-- Indicators -->
+      <div class="rp-section">
+        <div class="rp-label">TEKNİK GÖSTERGELER</div>
+        <div class="ind-grid" id="ind-grid">
+          <div class="ind-cell"><div class="ind-cell-label">RSI (14)</div><div class="ind-cell-value" id="v-rsi">—</div><div class="ind-cell-sub" id="s-rsi"></div></div>
+          <div class="ind-cell"><div class="ind-cell-label">MACD Hist.</div><div class="ind-cell-value" id="v-macd">—</div><div class="ind-cell-sub" id="s-macd"></div></div>
+          <div class="ind-cell"><div class="ind-cell-label">EMA 20</div><div class="ind-cell-value" id="v-ema20">—</div><div class="ind-cell-sub" id="s-ema20"></div></div>
+          <div class="ind-cell"><div class="ind-cell-label">EMA 50</div><div class="ind-cell-value" id="v-ema50">—</div><div class="ind-cell-sub" id="s-ema50"></div></div>
+          <div class="ind-cell"><div class="ind-cell-label">BB Üst</div><div class="ind-cell-value" id="v-bbu">—</div><div class="ind-cell-sub" id="s-bbu"></div></div>
+          <div class="ind-cell"><div class="ind-cell-label">BB Alt</div><div class="ind-cell-value" id="v-bbl">—</div><div class="ind-cell-sub" id="s-bbl"></div></div>
+        </div>
+      </div>
+
+      <!-- S/R -->
+      <div class="rp-section" id="sr-section">
+        <div class="rp-label">DESTEK / DİRENÇ</div>
+        <div id="sr-list"></div>
+      </div>
+
+      <!-- AI -->
+      <div id="ai-section">
+        <div id="ai-label">◈ AI ANALİZ</div>
+        <button id="ai-run-btn">▶ ANALİZ BAŞLAT</button>
+        <div id="ai-result">
+          <div class="ai-idle">
+            <div class="ai-idle-icon">◈</div>
+            <div>RSI · MACD · BB · EMA · S/R konfluence analizi ile AL / SAT / BEKLE sinyali üretir</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   ASSETS
+═══════════════════════════════════════════════════ */
+const ASSETS = {
+  crypto: [
+    {id:"BTC", name:"Bitcoin",           src:"binance"},
+    {id:"ETH", name:"Ethereum",          src:"binance"},
+    {id:"BNB", name:"BNB",              src:"binance"},
+    {id:"SOL", name:"Solana",            src:"binance"},
+    {id:"XRP", name:"XRP",              src:"binance"},
+    {id:"DOGE",name:"Dogecoin",          src:"binance"},
+    {id:"ADA", name:"Cardano",           src:"binance"},
+    {id:"AVAX",name:"Avalanche",         src:"binance"},
+    {id:"SHIB",name:"Shiba Inu",         src:"binance"},
+    {id:"TON", name:"Toncoin",           src:"binance"},
+    {id:"LINK",name:"Chainlink",         src:"binance"},
+    {id:"DOT", name:"Polkadot",          src:"binance"},
+    {id:"TRX", name:"TRON",             src:"binance"},
+    {id:"MATIC",name:"Polygon",          src:"binance"},
+    {id:"UNI", name:"Uniswap",           src:"binance"},
+    {id:"LTC", name:"Litecoin",          src:"binance"},
+    {id:"BCH", name:"Bitcoin Cash",      src:"binance"},
+    {id:"XLM", name:"Stellar",           src:"binance"},
+    {id:"ATOM",name:"Cosmos",            src:"binance"},
+    {id:"APT", name:"Aptos",             src:"binance"},
+    {id:"ICP", name:"Internet Computer", src:"binance"},
+    {id:"ARB", name:"Arbitrum",          src:"binance"},
+    {id:"OP",  name:"Optimism",          src:"binance"},
+    {id:"INJ", name:"Injective",         src:"binance"},
+    {id:"NEAR",name:"NEAR Protocol",     src:"binance"},
+    {id:"MKR", name:"Maker",             src:"binance"},
+    {id:"AAVE",name:"Aave",              src:"binance"},
+    {id:"FIL", name:"Filecoin",          src:"binance"},
+    {id:"VET", name:"VeChain",           src:"binance"},
+    {id:"ALGO",name:"Algorand",          src:"binance"},
+  ],
+  us: [
+    {id:"AAPL", name:"Apple",              src:"yahoo"},
+    {id:"MSFT", name:"Microsoft",          src:"yahoo"},
+    {id:"NVDA", name:"NVIDIA",             src:"yahoo"},
+    {id:"AMZN", name:"Amazon",             src:"yahoo"},
+    {id:"META", name:"Meta Platforms",     src:"yahoo"},
+    {id:"GOOGL",name:"Alphabet",           src:"yahoo"},
+    {id:"TSLA", name:"Tesla",              src:"yahoo"},
+    {id:"AVGO", name:"Broadcom",           src:"yahoo"},
+    {id:"ORCL", name:"Oracle",             src:"yahoo"},
+    {id:"CRM",  name:"Salesforce",         src:"yahoo"},
+    {id:"AMD",  name:"AMD",               src:"yahoo"},
+    {id:"QCOM", name:"Qualcomm",           src:"yahoo"},
+    {id:"ADBE", name:"Adobe",              src:"yahoo"},
+    {id:"INTU", name:"Intuit",             src:"yahoo"},
+    {id:"NOW",  name:"ServiceNow",         src:"yahoo"},
+    {id:"CSCO", name:"Cisco",              src:"yahoo"},
+    {id:"IBM",  name:"IBM",               src:"yahoo"},
+    {id:"NFLX", name:"Netflix",            src:"yahoo"},
+    {id:"MU",   name:"Micron Technology",  src:"yahoo"},
+    {id:"LLY",  name:"Eli Lilly",          src:"yahoo"},
+    {id:"UNH",  name:"UnitedHealth",       src:"yahoo"},
+    {id:"JNJ",  name:"Johnson & Johnson",  src:"yahoo"},
+    {id:"MRK",  name:"Merck",              src:"yahoo"},
+    {id:"ABBV", name:"AbbVie",             src:"yahoo"},
+    {id:"PFE",  name:"Pfizer",             src:"yahoo"},
+    {id:"TMO",  name:"Thermo Fisher",      src:"yahoo"},
+    {id:"AMGN", name:"Amgen",              src:"yahoo"},
+    {id:"JPM",  name:"JPMorgan Chase",     src:"yahoo"},
+    {id:"BAC",  name:"Bank of America",    src:"yahoo"},
+    {id:"WFC",  name:"Wells Fargo",        src:"yahoo"},
+    {id:"GS",   name:"Goldman Sachs",      src:"yahoo"},
+    {id:"V",    name:"Visa",               src:"yahoo"},
+    {id:"MA",   name:"Mastercard",         src:"yahoo"},
+    {id:"BRK-B",name:"Berkshire Hathaway", src:"yahoo"},
+    {id:"AXP",  name:"American Express",   src:"yahoo"},
+    {id:"SPGI", name:"S&P Global",         src:"yahoo"},
+    {id:"BLK",  name:"BlackRock",          src:"yahoo"},
+    {id:"WMT",  name:"Walmart",            src:"yahoo"},
+    {id:"COST", name:"Costco",             src:"yahoo"},
+    {id:"PG",   name:"Procter & Gamble",   src:"yahoo"},
+    {id:"KO",   name:"Coca-Cola",          src:"yahoo"},
+    {id:"PEP",  name:"PepsiCo",            src:"yahoo"},
+    {id:"MCD",  name:"McDonald's",         src:"yahoo"},
+    {id:"HD",   name:"Home Depot",         src:"yahoo"},
+    {id:"LOW",  name:"Lowe's",             src:"yahoo"},
+    {id:"SBUX", name:"Starbucks",          src:"yahoo"},
+    {id:"NKE",  name:"Nike",               src:"yahoo"},
+    {id:"XOM",  name:"ExxonMobil",         src:"yahoo"},
+    {id:"CVX",  name:"Chevron",            src:"yahoo"},
+    {id:"CAT",  name:"Caterpillar",        src:"yahoo"},
+    {id:"GE",   name:"GE Aerospace",       src:"yahoo"},
+    {id:"HON",  name:"Honeywell",          src:"yahoo"},
+    {id:"RTX",  name:"RTX Corp",           src:"yahoo"},
+    {id:"UNP",  name:"Union Pacific",      src:"yahoo"},
+    {id:"FDX",  name:"FedEx",              src:"yahoo"},
+    {id:"NEE",  name:"NextEra Energy",     src:"yahoo"},
+    {id:"LIN",  name:"Linde",              src:"yahoo"},
+    {id:"DE",   name:"Deere & Co",         src:"yahoo"},
+    {id:"NOC",  name:"Northrop Grumman",   src:"yahoo"},
+    {id:"MMM",  name:"3M",                src:"yahoo"},
+    {id:"PANW", name:"Palo Alto Networks", src:"yahoo"},
+    {id:"AMAT", name:"Applied Materials",  src:"yahoo"},
+    {id:"LRCX", name:"Lam Research",       src:"yahoo"},
+    {id:"KLAC", name:"KLA Corp",           src:"yahoo"},
+    {id:"BKNG", name:"Booking Holdings",   src:"yahoo"},
+    {id:"ISRG", name:"Intuitive Surgical", src:"yahoo"},
+    {id:"VRTX", name:"Vertex Pharma",      src:"yahoo"},
+    {id:"REGN", name:"Regeneron",          src:"yahoo"},
+    {id:"MCO",  name:"Moody's",            src:"yahoo"},
+    {id:"CME",  name:"CME Group",          src:"yahoo"},
+    {id:"APD",  name:"Air Products",       src:"yahoo"},
+    {id:"SHW",  name:"Sherwin-Williams",   src:"yahoo"},
+    {id:"WM",   name:"Waste Management",   src:"yahoo"},
+    {id:"CTAS", name:"Cintas",             src:"yahoo"},
+    {id:"ELV",  name:"Elevance Health",    src:"yahoo"},
+    {id:"CI",   name:"Cigna",              src:"yahoo"},
+    {id:"HCA",  name:"HCA Healthcare",     src:"yahoo"},
+    {id:"OXY",  name:"Occidental Petroleum",src:"yahoo"},
+    {id:"ADM",  name:"Archer-Daniels",     src:"yahoo"},
+  ],
+  bist: [
+    {id:"GARAN.IS", name:"Garanti BBVA",         src:"yahoo"},
+    {id:"AKBNK.IS", name:"Akbank",               src:"yahoo"},
+    {id:"ISCTR.IS", name:"İş Bankası C",         src:"yahoo"},
+    {id:"YKBNK.IS", name:"Yapı Kredi",           src:"yahoo"},
+    {id:"HALKB.IS", name:"Halkbank",             src:"yahoo"},
+    {id:"VAKBN.IS", name:"Vakıfbank",            src:"yahoo"},
+    {id:"QNBFB.IS", name:"QNB Finansbank",       src:"yahoo"},
+    {id:"THYAO.IS", name:"Türk Hava Yolları",    src:"yahoo"},
+    {id:"PGSUS.IS", name:"Pegasus Hava Yolları", src:"yahoo"},
+    {id:"TAVHL.IS", name:"TAV Havalimanları",     src:"yahoo"},
+    {id:"ASELS.IS", name:"Aselsan",              src:"yahoo"},
+    {id:"EREGL.IS", name:"Ereğli Demir Çelik",  src:"yahoo"},
+    {id:"KRDMD.IS", name:"Kardemir D",           src:"yahoo"},
+    {id:"KOZAL.IS", name:"Koza Altın",           src:"yahoo"},
+    {id:"TUPRS.IS", name:"Tüpraş",               src:"yahoo"},
+    {id:"PETKM.IS", name:"Petkim",               src:"yahoo"},
+    {id:"SASA.IS",  name:"Sasa Polyester",       src:"yahoo"},
+    {id:"KCHOL.IS", name:"Koç Holding",          src:"yahoo"},
+    {id:"SAHOL.IS", name:"Sabancı Holding",      src:"yahoo"},
+    {id:"TKFEN.IS", name:"Tekfen Holding",       src:"yahoo"},
+    {id:"SISE.IS",  name:"Şişecam",              src:"yahoo"},
+    {id:"FROTO.IS", name:"Ford Otosan",          src:"yahoo"},
+    {id:"TOASO.IS", name:"Tofaş Oto",            src:"yahoo"},
+    {id:"OTKAR.IS", name:"Otokar",               src:"yahoo"},
+    {id:"ARCLK.IS", name:"Arçelik",              src:"yahoo"},
+    {id:"VESTL.IS", name:"Vestel Elektronik",    src:"yahoo"},
+    {id:"ULKER.IS", name:"Ülker Bisküvi",        src:"yahoo"},
+    {id:"AEFES.IS", name:"Anadolu Efes",         src:"yahoo"},
+    {id:"CCOLA.IS", name:"Coca Cola İçecek",     src:"yahoo"},
+    {id:"TCELL.IS", name:"Turkcell",             src:"yahoo"},
+    {id:"TTKOM.IS", name:"Türk Telekom",         src:"yahoo"},
+    {id:"BIMAS.IS", name:"BİM Mağazalar",        src:"yahoo"},
+    {id:"MGROS.IS", name:"Migros Ticaret",       src:"yahoo"},
+    {id:"SOKM.IS",  name:"Şok Marketler",        src:"yahoo"},
+    {id:"TTRAK.IS", name:"Türk Traktör",         src:"yahoo"},
+    {id:"ENKAI.IS", name:"Enka İnşaat",          src:"yahoo"},
+    {id:"EKGYO.IS", name:"Emlak Konut GYO",      src:"yahoo"},
+    {id:"CEMTS.IS", name:"Çimsa Çimento",        src:"yahoo"},
+    {id:"NUHCM.IS", name:"Nuh Çimento",          src:"yahoo"},
+    {id:"AKSEN.IS", name:"Aksa Enerji",          src:"yahoo"},
+    {id:"ZOREN.IS", name:"Zorlu Enerji",         src:"yahoo"},
+    {id:"DOHOL.IS", name:"Doğan Holding",        src:"yahoo"},
+    {id:"LOGO.IS",  name:"Logo Yazılım",         src:"yahoo"},
+    {id:"PENTA.IS", name:"Penta Teknoloji",      src:"yahoo"},
+    {id:"SELEC.IS", name:"Selçuk Ecza",          src:"yahoo"},
+    {id:"GUBRF.IS", name:"Gübre Fabrikaları",     src:"yahoo"},
+    {id:"SODA.IS",  name:"Soda Sanayii",         src:"yahoo"},
+    {id:"INDES.IS", name:"İndeks Bilgisayar",    src:"yahoo"},
+    {id:"MPARK.IS", name:"Medicana Sağlık",      src:"yahoo"},
+    {id:"RYSAS.IS", name:"Reysaş Lojistik",      src:"yahoo"},
+  ],
+  emtia: [
+    {id:"GC=F",  name:"Altın (Gold Futures)",   src:"yahoo"},
+    {id:"SI=F",  name:"Gümüş (Silver Futures)", src:"yahoo"},
+    {id:"PL=F",  name:"Platin",                 src:"yahoo"},
+    {id:"PA=F",  name:"Paladyum",               src:"yahoo"},
+    {id:"CL=F",  name:"Ham Petrol (WTI)",       src:"yahoo"},
+    {id:"BZ=F",  name:"Brent Petrol",           src:"yahoo"},
+    {id:"NG=F",  name:"Doğal Gaz",              src:"yahoo"},
+    {id:"HG=F",  name:"Bakır",                  src:"yahoo"},
+    {id:"ALI=F", name:"Alüminyum",              src:"yahoo"},
+    {id:"ZW=F",  name:"Buğday",                 src:"yahoo"},
+    {id:"ZC=F",  name:"Mısır",                  src:"yahoo"},
+    {id:"ZS=F",  name:"Soya Fasulyesi",         src:"yahoo"},
+    {id:"KC=F",  name:"Kahve",                  src:"yahoo"},
+    {id:"SB=F",  name:"Şeker",                  src:"yahoo"},
+    {id:"CT=F",  name:"Pamuk",                  src:"yahoo"},
+  ],
+};
+
+/* ═══════════════════════════════════════════════════
+   INDICATORS
+═══════════════════════════════════════════════════ */
+function calcEMA(arr, period) {
+  const k = 2 / (period + 1);
+  const out = new Array(arr.length).fill(null);
+  let sum = 0, cnt = 0, v = null;
+  arr.forEach((x, i) => {
+    if (x == null) return;
+    cnt++; sum += x;
+    if (cnt === period) { v = sum / period; out[i] = v; }
+    else if (cnt > period) { v = x * k + v * (1 - k); out[i] = v; }
+  });
+  return out;
+}
+
+function calcRSI(closes, period = 14) {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length < period + 1) return out;
+  let ag = 0, al = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i-1];
+    if (d > 0) ag += d; else al -= d;
+  }
+  ag /= period; al /= period;
+  out[period] = 100 - 100 / (1 + ag / (al || 1e-10));
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i-1];
+    ag = (ag * (period-1) + (d > 0 ? d : 0)) / period;
+    al = (al * (period-1) + (d < 0 ? -d : 0)) / period;
+    out[i] = 100 - 100 / (1 + ag / (al || 1e-10));
+  }
+  return out;
+}
+
+function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
+  const e12 = calcEMA(closes, fast);
+  const e26 = calcEMA(closes, slow);
+  const macdLine = closes.map((_, i) =>
+    e12[i] != null && e26[i] != null ? e12[i] - e26[i] : null
+  );
+  const signalLine = new Array(closes.length).fill(null);
+  const k = 2 / (signal + 1);
+  let sv = null, cnt = 0, sum = 0;
+  macdLine.forEach((m, i) => {
+    if (m == null) return;
+    cnt++; sum += m;
+    if (cnt === signal) { sv = sum / signal; signalLine[i] = sv; }
+    else if (cnt > signal) { sv = m * k + sv * (1 - k); signalLine[i] = sv; }
+  });
+  return {
+    macd: macdLine,
+    signal: signalLine,
+    hist: macdLine.map((m, i) => m != null && signalLine[i] != null ? m - signalLine[i] : null),
+  };
+}
+
+function calcBB(closes, period = 20, mult = 2) {
+  const upper = new Array(closes.length).fill(null);
+  const mid   = new Array(closes.length).fill(null);
+  const lower = new Array(closes.length).fill(null);
+  for (let i = period - 1; i < closes.length; i++) {
+    const sl = closes.slice(i - period + 1, i + 1).filter(v => v != null);
+    if (sl.length < period) continue;
+    const avg = sl.reduce((a, b) => a + b, 0) / period;
+    const std = Math.sqrt(sl.reduce((s, v) => s + (v - avg) ** 2, 0) / period);
+    upper[i] = avg + mult * std;
+    mid[i]   = avg;
+    lower[i] = avg - mult * std;
+  }
+  return { upper, mid, lower };
+}
+
+function calcSR(ohlc, window = 5) {
+  const levels = [];
+  for (let i = window; i < ohlc.length - window; i++) {
+    const slice = ohlc.slice(i - window, i + window + 1);
+    if (ohlc[i].high === Math.max(...slice.map(d => d.high)))
+      levels.push({ type: "R", value: ohlc[i].high });
+    if (ohlc[i].low === Math.min(...slice.map(d => d.low)))
+      levels.push({ type: "S", value: ohlc[i].low });
+  }
+  const merged = [];
+  levels.forEach(l => {
+    if (!merged.find(d => d.type === l.type && Math.abs(d.value - l.value) / l.value < 0.008))
+      merged.push(l);
+  });
+  return merged.slice(-8);
+}
+
+/* ═══════════════════════════════════════════════════
+   FORMAT
+═══════════════════════════════════════════════════ */
+function fmtPrice(v, ref) {
+  if (v == null || isNaN(v)) return "—";
+  if (v >= 100000) return v.toLocaleString("tr-TR", {maximumFractionDigits: 0});
+  if (v >= 1000)   return v.toLocaleString("tr-TR", {maximumFractionDigits: 2});
+  if (v >= 100)    return v.toFixed(2);
+  if (v >= 1)      return v.toFixed(4);
+  if (v >= 0.01)   return v.toFixed(5);
+  return v.toFixed(7);
+}
+function fmtVol(v) {
+  if (!v) return "—";
+  if (v > 1e9) return (v/1e9).toFixed(2) + "B";
+  if (v > 1e6) return (v/1e6).toFixed(2) + "M";
+  if (v > 1e3) return (v/1e3).toFixed(1) + "K";
+  return v.toFixed(0);
+}
+function last(arr) {
+  if (!arr) return null;
+  for (let i = arr.length - 1; i >= 0; i--)
+    if (arr[i] != null) return arr[i];
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════ */
+let state = {
+  market:   "crypto",
+  asset:    null,
+  interval: "1d",
+  candles:  [],
+  inds:     null,
+  ticker:   null,
+  showEMA:  true,
+  showBB:   false,
+  showSR:   true,
+  subChart: "rsi",
+};
+
+let mainChart    = null;
+let mainSeries   = null;
+let subChartObj  = null;
+let subSeries    = null;
+let ema20Series  = null;
+let ema50Series  = null;
+let bbUpperSeries= null;
+let bbMidSeries  = null;
+let bbLowerSeries= null;
+let srLines      = [];
+let sidebarPrices = {};
+
+/* ═══════════════════════════════════════════════════
+   CHART INIT
+═══════════════════════════════════════════════════ */
+function initCharts() {
+  const chartOpts = {
+    layout: {
+      background: { color: "#070b11" },
+      textColor: "#7a8fa8",
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 10,
+    },
+    grid: {
+      vertLines: { color: "#111827", style: 1 },
+      horzLines: { color: "#111827", style: 1 },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: "#3d5068", width: 1, style: 2, labelBackgroundColor: "#1d2738" },
+      horzLine: { color: "#3d5068", width: 1, style: 2, labelBackgroundColor: "#1d2738" },
+    },
+    rightPriceScale: {
+      borderColor: "#1d2738",
+      scaleMargins: { top: 0.08, bottom: 0.08 },
+    },
+    timeScale: {
+      borderColor: "#1d2738",
+      timeVisible: true,
+      secondsVisible: false,
+    },
+    handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
+  };
+
+  // Main chart
+  mainChart = LightweightCharts.createChart(document.getElementById("main-chart"), {
+    ...chartOpts,
+    height: document.getElementById("main-chart-container").clientHeight,
+  });
+  mainSeries = mainChart.addCandlestickSeries({
+    upColor:          "#26a69a",
+    downColor:        "#ef5350",
+    borderUpColor:    "#26a69a",
+    borderDownColor:  "#ef5350",
+    wickUpColor:      "#26a69a",
+    wickDownColor:    "#ef5350",
+  });
+
+  // Sub chart
+  subChartObj = LightweightCharts.createChart(document.getElementById("sub-chart"), {
+    ...chartOpts,
+    height: document.getElementById("sub-chart-container").clientHeight,
+    timeScale: { ...chartOpts.timeScale, visible: false },
+    rightPriceScale: { ...chartOpts.rightPriceScale, scaleMargins: { top: 0.1, bottom: 0.1 } },
+  });
+
+  // Sync time scales
+  mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (range) subChartObj.timeScale().setVisibleLogicalRange(range);
+  });
+  subChartObj.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (range) mainChart.timeScale().setVisibleLogicalRange(range);
+  });
+
+  // Resize observer
+  const ro = new ResizeObserver(() => {
+    const mh = document.getElementById("main-chart-container").clientHeight;
+    const sh = document.getElementById("sub-chart-container").clientHeight;
+    if (mh > 0) mainChart.resize(document.getElementById("main-chart-container").clientWidth, mh);
+    if (sh > 0) subChartObj.resize(document.getElementById("sub-chart-container").clientWidth, sh);
+  });
+  ro.observe(document.getElementById("main-chart-container"));
+  ro.observe(document.getElementById("sub-chart-container"));
+}
+
+/* ═══════════════════════════════════════════════════
+   LOAD & RENDER
+═══════════════════════════════════════════════════ */
+async function loadAsset(asset, interval) {
+  setOverlay("main", true, "Yükleniyor...");
+  setOverlay("sub",  true, "");
+
+  try {
+    const r = await fetch(`/api/candles/${encodeURIComponent(asset.id)}?interval=${interval}`);
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error || "Veri hatası");
+
+    state.candles = data.candles;
+    computeIndicators();
+    renderCharts();
+    updateIndicatorPanel();
+    updateSRPanel();
+    setOverlay("main", false);
+    setOverlay("sub",  false);
+
+    // Also fetch ticker
+    fetchTicker(asset);
+
+  } catch(e) {
+    setOverlay("main", true, "⚠ " + e.message, true);
+    setOverlay("sub",  false);
+  }
+}
+
+async function fetchTicker(asset) {
+  try {
+    const r = await fetch(`/api/ticker/${encodeURIComponent(asset.id)}`);
+    const d = await r.json();
+    if (!d.ok) return;
+    state.ticker = d;
+    updateTopbarTicker(d, asset);
+  } catch {}
+}
+
+function computeIndicators() {
+  const candles = state.candles;
+  const closes  = candles.map(c => c.close);
+  state.inds = {
+    ema20:  calcEMA(closes, 20),
+    ema50:  calcEMA(closes, 50),
+    rsi:    calcRSI(closes),
+    macd:   calcMACD(closes),
+    bb:     calcBB(closes),
+    sr:     calcSR(candles),
+  };
+}
+
+function renderCharts() {
+  if (!mainChart || !state.candles.length) return;
+
+  const candles = state.candles;
+  const inds    = state.inds;
+
+  // Candle data
+  mainSeries.setData(candles.map(c => ({
+    time: c.time, open: c.open, high: c.high, low: c.low, close: c.close
+  })));
+
+  // Remove old overlay series
+  if (ema20Series)   { try { mainChart.removeSeries(ema20Series); } catch {} ema20Series = null; }
+  if (ema50Series)   { try { mainChart.removeSeries(ema50Series); } catch {} ema50Series = null; }
+  if (bbUpperSeries) { try { mainChart.removeSeries(bbUpperSeries); } catch {} bbUpperSeries = null; }
+  if (bbMidSeries)   { try { mainChart.removeSeries(bbMidSeries); } catch {} bbMidSeries = null; }
+  if (bbLowerSeries) { try { mainChart.removeSeries(bbLowerSeries); } catch {} bbLowerSeries = null; }
+  srLines.forEach(l => { try { mainChart.removeSeries(l); } catch {} });
+  srLines = [];
+
+  // EMA
+  if (state.showEMA) {
+    ema20Series = mainChart.addLineSeries({ color: "#4f8ef7", lineWidth: 1.5, title: "EMA20", lastValueVisible: true, priceLineVisible: false });
+    ema50Series = mainChart.addLineSeries({ color: "#f5a623", lineWidth: 1.5, title: "EMA50", lastValueVisible: true, priceLineVisible: false });
+    ema20Series.setData(candles.map((c,i) => inds.ema20[i] != null ? {time:c.time, value:inds.ema20[i]} : null).filter(Boolean));
+    ema50Series.setData(candles.map((c,i) => inds.ema50[i] != null ? {time:c.time, value:inds.ema50[i]} : null).filter(Boolean));
+  }
+
+  // Bollinger
+  if (state.showBB) {
+    bbUpperSeries = mainChart.addLineSeries({ color: "rgba(155,127,232,0.7)", lineWidth: 1, lineStyle: 2, title: "BB+", lastValueVisible: false, priceLineVisible: false });
+    bbMidSeries   = mainChart.addLineSeries({ color: "rgba(155,127,232,0.4)", lineWidth: 1, lineStyle: 3, title: "BB=", lastValueVisible: false, priceLineVisible: false });
+    bbLowerSeries = mainChart.addLineSeries({ color: "rgba(155,127,232,0.7)", lineWidth: 1, lineStyle: 2, title: "BB-", lastValueVisible: false, priceLineVisible: false });
+    bbUpperSeries.setData(candles.map((c,i) => inds.bb.upper[i] != null ? {time:c.time, value:inds.bb.upper[i]} : null).filter(Boolean));
+    bbMidSeries  .setData(candles.map((c,i) => inds.bb.mid[i]   != null ? {time:c.time, value:inds.bb.mid[i]}   : null).filter(Boolean));
+    bbLowerSeries.setData(candles.map((c,i) => inds.bb.lower[i] != null ? {time:c.time, value:inds.bb.lower[i]} : null).filter(Boolean));
+  }
+
+  // S/R as price lines on main series
+  if (state.showSR) {
+    inds.sr.forEach(l => {
+      const lineColor = l.type === "S" ? "rgba(38,166,154,0.5)" : "rgba(239,83,80,0.5)";
+      mainSeries.createPriceLine({
+        price: l.value,
+        color: lineColor,
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: l.type === "S" ? "DES" : "DIR",
+      });
+    });
+  }
+
+  // Sub chart
+  renderSubChart();
+  mainChart.timeScale().fitContent();
+}
+
+function renderSubChart() {
+  if (!subChartObj || !state.candles.length) return;
+  const candles = state.candles;
+  const inds    = state.inds;
+
+  // Remove old series
+  if (subSeries) {
+    const toRemove = Array.isArray(subSeries) ? subSeries : [subSeries];
+    toRemove.forEach(s => { try { subChartObj.removeSeries(s); } catch {} });
+    subSeries = null;
+  }
+
+  if (state.subChart === "rsi") {
+    subSeries = subChartObj.addLineSeries({
+      color: "#e8b84b", lineWidth: 1.5, priceLineVisible: false,
+      title: "RSI",
+      autoscaleInfoProvider: () => ({priceRange:{minValue:0,maxValue:100}})
+    });
+    subSeries.setData(candles.map((c,i) => inds.rsi[i] != null ? {time:c.time, value:inds.rsi[i]} : null).filter(Boolean));
+    // Reference lines
+    [70, 50, 30].forEach(level => {
+      subSeries.createPriceLine({
+        price: level, color: level===50?"#1d2738":level===70?"rgba(239,83,80,0.4)":"rgba(38,166,154,0.4)",
+        lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: false,
+      });
+    });
+
+    const lv = last(inds.rsi);
+    if (lv) {
+      const col = lv > 70 ? "#ef5350" : lv < 30 ? "#26a69a" : "#7a8fa8";
+      document.getElementById("rsi-live").innerHTML =
+        `<span style="color:${col}">RSI ${lv.toFixed(1)}${lv>70?" · AŞIRI ALIM":lv<30?" · AŞIRI SATIM":""}</span>`;
+    }
+
+  } else if (state.subChart === "macd") {
+    const histSeries = subChartObj.addHistogramSeries({
+      priceLineVisible: false,
+    });
+    const macdLine = subChartObj.addLineSeries({
+      color: "#4f8ef7", lineWidth: 1.5, priceLineVisible: false, title: "MACD"
+    });
+    const signalLine = subChartObj.addLineSeries({
+      color: "#ef5350", lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: "Sinyal"
+    });
+
+    histSeries.setData(candles.map((c,i) => {
+      const v = inds.macd.hist[i];
+      return v != null ? {time:c.time, value:v, color: v>=0?"rgba(38,166,154,0.7)":"rgba(239,83,80,0.7)"} : null;
+    }).filter(Boolean));
+    macdLine.setData(candles.map((c,i) => inds.macd.macd[i] != null ? {time:c.time, value:inds.macd.macd[i]} : null).filter(Boolean));
+    signalLine.setData(candles.map((c,i) => inds.macd.signal[i] != null ? {time:c.time, value:inds.macd.signal[i]} : null).filter(Boolean));
+    subSeries = [histSeries, macdLine, signalLine];
+    document.getElementById("rsi-live").innerHTML = "";
+
+  } else if (state.subChart === "volume") {
+    subSeries = subChartObj.addHistogramSeries({
+      priceLineVisible: false, title: "Hacim",
+    });
+    subSeries.setData(candles.map((c,i) => {
+      const col = c.close >= c.open ? "rgba(38,166,154,0.6)" : "rgba(239,83,80,0.6)";
+      return { time:c.time, value:c.volume, color:col };
+    }));
+    document.getElementById("rsi-live").innerHTML = "";
+  }
+
+  subChartObj.timeScale().fitContent();
+}
+
+/* ═══════════════════════════════════════════════════
+   PANELS
+═══════════════════════════════════════════════════ */
+function updateTopbarTicker(d, asset) {
+  document.getElementById("tick-price").textContent = fmtPrice(d.price);
+  document.getElementById("tick-price").style.color = d.change >= 0 ? "#26a69a" : "#ef5350";
+
+  const sign = d.change >= 0 ? "▲" : "▼";
+  const col  = d.change >= 0 ? "#26a69a" : "#ef5350";
+  document.getElementById("tick-change").innerHTML = `<span style="color:${col}">${sign} ${Math.abs(d.change).toFixed(2)}%</span>`;
+  document.getElementById("tick-vol-val").textContent = fmtVol(d.volume24h);
+  if (d.high24h && d.low24h)
+    document.getElementById("tick-hl").innerHTML = `<span style="color:#3d5068">Y</span> ${fmtPrice(d.high24h)} &nbsp;<span style="color:#3d5068">D</span> ${fmtPrice(d.low24h)}`;
+  document.getElementById("tick-ts").textContent = new Date().toLocaleTimeString("tr-TR");
+
+  // Source badge
+  const badge = document.getElementById("source-badge");
+  if (asset.src === "binance") {
+    badge.textContent = "CANLI · BİNANCE"; badge.style.borderColor = "#26a69a"; badge.style.color = "#26a69a";
+  } else {
+    badge.textContent = "15DK GECİKMELİ · YAHOO"; badge.style.borderColor = "#4f8ef7"; badge.style.color = "#4f8ef7";
+  }
+
+  // Update sidebar item
+  sidebarPrices[asset.id] = { price: d.price, change: d.change };
+  const el = document.querySelector(`.asset-item[data-id="${asset.id}"] .asset-price`);
+  if (el) el.innerHTML = `<div>${fmtPrice(d.price)}</div><div class="asset-change ${d.change>=0?"up":"dn"}">${d.change>=0?"+":""}${d.change.toFixed(2)}%</div>`;
+}
+
+function updateIndicatorPanel() {
+  if (!state.inds || !state.candles.length) return;
+  const inds   = state.inds;
+  const closes = state.candles.map(c => c.close);
+  const lC = last(closes);
+  const lRSI  = last(inds.rsi);
+  const lHist = last(inds.macd.hist);
+  const lE20  = last(inds.ema20), lE50 = last(inds.ema50);
+  const lBBU  = last(inds.bb.upper), lBBL = last(inds.bb.lower);
+
+  function setCell(id, val, color, sub) {
+    document.getElementById("v-"+id).textContent = val ?? "—";
+    document.getElementById("v-"+id).style.color  = color || "var(--text)";
+    document.getElementById("s-"+id).textContent  = sub || "";
+    document.getElementById("s-"+id).style.color  = color || "var(--text-dim)";
+  }
+
+  const rsiC = lRSI > 70 ? "#ef5350" : lRSI < 30 ? "#26a69a" : "var(--text)";
+  setCell("rsi",   lRSI?.toFixed(1), rsiC, lRSI>70?"AŞIRI ALIM":lRSI<30?"AŞIRI SATIM":"NÖTR");
+  setCell("macd",  lHist?.toFixed(4), lHist>0?"#26a69a":"#ef5350", lHist>0?"Yükseliş Mom.":"Düşüş Mom.");
+  setCell("ema20", fmtPrice(lE20),   lC>lE20?"#26a69a":"#ef5350", lC>lE20?"Fiyat üstünde":"Fiyat altında");
+  setCell("ema50", fmtPrice(lE50),   lC>lE50?"#26a69a":"#ef5350", lE20>lE50?"Altın Kesişim":"Ölüm Kesişimi");
+  setCell("bbu",   fmtPrice(lBBU),  lC>lBBU?"#ef5350":"var(--text-mid)", lC>lBBU?"Üst bant kırıldı":"Bant içi");
+  setCell("bbl",   fmtPrice(lBBL),  lC<lBBL?"#26a69a":"var(--text-mid)", lC<lBBL?"Alt bant kırıldı":"Bant içi");
+}
+
+function updateSRPanel() {
+  if (!state.inds) return;
+  const lC  = last(state.candles.map(c => c.close));
+  const srs = state.inds.sr.slice(-6).sort((a,b) => b.value - a.value);
+  const el  = document.getElementById("sr-list");
+  el.innerHTML = srs.map(l => {
+    const pct = lC ? Math.abs((l.value - lC) / lC * 100).toFixed(1) : null;
+    const col = l.type === "S" ? "#26a69a" : "#ef5350";
+    return `<div class="sr-row">
+      <div class="sr-type"><span class="sr-bar" style="background:${col}"></span>${l.type==="S"?"DESTEK":"DİRENÇ"}</div>
+      <span style="font-size:10px;font-weight:500">${fmtPrice(l.value)}</span>
+      ${pct?`<span class="sr-pct" style="color:${col}">%${pct}</span>`:""}
+    </div>`;
+  }).join("");
+}
+
+/* ═══════════════════════════════════════════════════
+   AI ANALYSIS
+═══════════════════════════════════════════════════ */
+document.getElementById("ai-run-btn").addEventListener("click", runAI);
+
+async function runAI() {
+  if (!state.candles.length || !state.inds) return;
+  const btn = document.getElementById("ai-run-btn");
+  btn.disabled = true;
+  btn.textContent = "◌ ANALİZ EDİLİYOR...";
+
+  document.getElementById("ai-result").innerHTML = `<div class="ai-idle"><div class="ai-idle-icon" style="animation:spin .8s linear infinite;display:inline-block">◌</div><div>Teknik göstergeler hesaplanıyor...</div></div>`;
+
+  try {
+    const closes = state.candles.map(c => c.close);
+    const inds   = state.inds;
+    const lC   = last(closes);
+    const lRSI = last(inds.rsi);
+    const lMH  = last(inds.macd.hist), lML = last(inds.macd.macd), lMS = last(inds.macd.signal);
+    const lE20 = last(inds.ema20), lE50 = last(inds.ema50);
+    const lBBU = last(inds.bb.upper), lBBL = last(inds.bb.lower), lBBM = last(inds.bb.mid);
+    const sr   = inds.sr.map(l=>`${l.type==="S"?"Destek":"Direnç"}:${fmtPrice(l.value)}`).join(", ");
+    const bars = state.candles.slice(-5).map(c=>`${c.open?.toFixed(4)}/${c.high?.toFixed(4)}/${c.low?.toFixed(4)}/${c.close?.toFixed(4)}`).join(" | ");
+
+    const prompt = `Profesyonel kripto/hisse teknik analistisisin. Verilen göstergeleri analiz et ve kesin sinyal üret.
+
+Varlık: ${state.asset.name} (${state.asset.id}) | Fiyat: ${fmtPrice(lC)} | Değişim: %${state.ticker?.change?.toFixed(2)||"?"}
+RSI(14): ${lRSI?.toFixed(2)} [${lRSI>70?"AŞIRI ALIM":lRSI<30?"AŞIRI SATIM":"NÖTR"}]
+MACD: ${lML?.toFixed(5)} | Sinyal: ${lMS?.toFixed(5)} | Histogram: ${lMH?.toFixed(5)} [${lMH>0?"Yükseliş":"Düşüş"}]
+Bollinger: Üst:${lBBU?.toFixed(4)} Orta:${lBBM?.toFixed(4)} Alt:${lBBL?.toFixed(4)} [Fiyat ${lC>lBBU?"ÜSTTE":lC<lBBL?"ALTTA":"İÇİNDE"}]
+EMA20: ${lE20?.toFixed(4)} [${lC>lE20?"▲ üstünde":"▼ altında"}] | EMA50: ${lE50?.toFixed(4)} [${lE20>lE50?"ALTIN KESİŞİM":"ÖLÜM KESİŞİMİ"}]
+Destek/Direnç: ${sr}
+Son 5 mum (A/Y/D/K): ${bars}
+
+SADECE JSON formatında, Türkçe yanıt ver:
+{"signal":"AL","confidence":72,"trend":"YÜKSELİŞ","summary":"İki cümle analiz.","entry":${lC?.toFixed(4)},"stopLoss":0,"tp1":0,"tp2":0,"riskReward":"1:2","confluence":["sinyal1","sinyal2","sinyal3"],"warnings":["uyari"],"timeframe":"kısa vade (1-3 gün)"}`;
+
+    const r = await fetch("/api/ai-analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 800,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error.message || "API hatası");
+    const txt  = data.content?.map(b => b.text || "").join("") || "";
+    const m    = txt.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error("Geçersiz yanıt formatı");
+    const res = JSON.parse(m[0]);
+    renderAIResult(res);
+
+  } catch(e) {
+    document.getElementById("ai-result").innerHTML =
+      `<div style="color:#ef5350;font-size:10px;padding:10px;background:var(--down-bg);border:1px solid rgba(239,83,80,0.2);border-radius:3px">⚠ ${e.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "▶ ANALİZ BAŞLAT";
+}
+
+function renderAIResult(res) {
+  const sc = res.signal==="AL" ? "#26a69a" : res.signal==="SAT" ? "#ef5350" : "#7a8fa8";
+  const tc = res.trend?.includes("YÜK") ? "#26a69a" : res.trend?.includes("DÜŞ") ? "#ef5350" : "#7a8fa8";
+  const bg = res.signal==="AL" ? "var(--up-bg)" : res.signal==="SAT" ? "var(--down-bg)" : "rgba(255,255,255,0.02)";
+
+  const levelsHTML = res.tp1 !== 0 ? `
+    <div class="ai-section-block">
+      <div class="ai-section-title">SEVİYELER</div>
+      <div class="levels-grid">
+        <div class="level-cell"><div class="level-label">GİRİŞ</div><div class="level-value" style="color:#e8b84b">${fmtPrice(res.entry)}</div></div>
+        <div class="level-cell"><div class="level-label">STOP LOSS</div><div class="level-value" style="color:#ef5350">${fmtPrice(res.stopLoss)}</div></div>
+        <div class="level-cell"><div class="level-label">HEDEF 1</div><div class="level-value" style="color:#26a69a">${fmtPrice(res.tp1)}</div></div>
+        <div class="level-cell"><div class="level-label">HEDEF 2</div><div class="level-value" style="color:#26a69a">${fmtPrice(res.tp2)}</div></div>
+      </div>
+      <div style="font-size:9px;color:var(--text-dim)">R/R <span style="color:var(--text)">${res.riskReward}</span> &nbsp;·&nbsp; ${res.timeframe}</div>
+    </div>` : "";
+
+  const confHTML = res.confluence?.length ? `
+    <div class="ai-section-block">
+      <div class="ai-section-title">KONFLUENCE SİNYALLERİ</div>
+      <div class="conf-list">${res.confluence.map(c=>`<div class="conf-item"><span class="conf-plus">+</span>${c}</div>`).join("")}</div>
+    </div>` : "";
+
+  const warnHTML = res.warnings?.filter(Boolean).length ? `
+    <div class="ai-section-block">
+      <div class="ai-section-title" style="color:#ef5350">UYARILAR</div>
+      <div class="conf-list">${res.warnings.map(w=>`<div class="conf-item"><span class="warn-plus">!</span>${w}</div>`).join("")}</div>
+    </div>` : "";
+
+  document.getElementById("ai-result").innerHTML = `
+    <div class="ai-signal-block" style="border-color:${sc};background:${bg}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="ai-signal-text" style="color:${sc}">${res.signal}</div>
+        <div class="ai-signal-trend" style="color:${tc}">${res.trend}</div>
+      </div>
+      <div class="confidence-bar-wrap">
+        <div class="confidence-bar"><div class="confidence-fill" style="width:${res.confidence}%;background:${sc}"></div></div>
+        <span class="confidence-pct" style="color:${sc}">${res.confidence}%</span>
+      </div>
+    </div>
+    <div class="ai-section-block">
+      <div class="ai-section-title">ANALİZ</div>
+      <div class="ai-summary">${res.summary}</div>
+    </div>
+    ${levelsHTML}
+    ${confHTML}
+    ${warnHTML}
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   SIDEBAR RENDER
+═══════════════════════════════════════════════════ */
+function renderSidebar() {
+  const market  = state.market;
+  const assets  = ASSETS[market];
+  const q       = document.getElementById("search").value.toLowerCase();
+  const filtered = q ? assets.filter(a => a.id.toLowerCase().includes(q) || a.name.toLowerCase().includes(q)) : assets;
+
+  document.getElementById("asset-list").innerHTML = filtered.map(a => {
+    const sp = sidebarPrices[a.id];
+    const priceHTML = sp
+      ? `<div class="asset-price"><div>${fmtPrice(sp.price)}</div><div class="asset-change ${sp.change>=0?"up":"dn"}">${sp.change>=0?"+":""}${sp.change.toFixed(2)}%</div></div>`
+      : `<div class="asset-price" style="color:var(--text-dim);font-size:9px">—</div>`;
+    const displayTicker = a.id.replace(".IS","").replace("=F","");
+    return `<div class="asset-item${state.asset?.id===a.id?" active":""}" data-id="${a.id}">
+      <div style="overflow:hidden">
+        <div class="asset-ticker">${displayTicker}</div>
+        <div class="asset-name">${a.name}</div>
+      </div>
+      ${priceHTML}
+    </div>`;
+  }).join("");
+
+  // Bind clicks
+  document.querySelectorAll(".asset-item").forEach(el => {
+    el.addEventListener("click", () => {
+      const a = ASSETS[market].find(x => x.id === el.dataset.id);
+      if (a && a.id !== state.asset?.id) selectAsset(a);
+    });
+  });
+}
+
+function selectAsset(asset) {
+  state.asset  = asset;
+  const displayTicker = asset.id.replace(".IS","").replace("=F","");
+  document.getElementById("asset-title").textContent    = displayTicker;
+  document.getElementById("asset-subtitle").textContent = asset.name;
+  renderSidebar();
+  // Reset AI
+  document.getElementById("ai-result").innerHTML = `<div class="ai-idle"><div class="ai-idle-icon">◈</div><div>Analiz başlatmak için butona tıklayın</div></div>`;
+  loadAsset(asset, state.interval);
+}
+
+/* ═══════════════════════════════════════════════════
+   OVERLAY HELPER
+═══════════════════════════════════════════════════ */
+function setOverlay(which, show, msg, isError) {
+  const id = which === "main" ? "main-overlay" : "sub-overlay";
+  const el = document.getElementById(id);
+  if (!show) { el.style.display = "none"; return; }
+  el.style.display = "flex";
+  el.innerHTML = isError
+    ? `<span style="color:#ef5350">${msg}</span><button onclick="loadAsset(state.asset,state.interval)" style="margin-top:8px;background:transparent;border:1px solid var(--border);color:var(--text);padding:5px 14px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-size:10px">Tekrar Dene</button>`
+    : `<span class="spinner">◌</span><span>${msg}</span>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   EVENT BINDINGS
+═══════════════════════════════════════════════════ */
+// Market tabs (topbar + sidebar)
+document.querySelectorAll(".top-market-tab, .mtab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const m = btn.dataset.market;
+    state.market = m;
+    document.querySelectorAll(".top-market-tab").forEach(b => b.classList.toggle("active", b.dataset.market===m));
+    document.querySelectorAll(".mtab").forEach(b => b.classList.toggle("active", b.dataset.market===m));
+    state.asset = null;
+    document.getElementById("search").value = "";
+    renderSidebar();
+  });
+});
+
+// Interval tabs
+document.querySelectorAll(".ivtab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    state.interval = btn.dataset.iv;
+    document.querySelectorAll(".ivtab").forEach(b => b.classList.toggle("active", b===btn));
+    if (state.asset) loadAsset(state.asset, state.interval);
+  });
+});
+
+// Sub chart tabs
+document.querySelectorAll(".subtab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    state.subChart = btn.dataset.sub;
+    document.querySelectorAll(".subtab").forEach(b => b.classList.toggle("active", b===btn));
+    renderSubChart();
+  });
+});
+
+// Indicator toggles
+document.getElementById("toggle-ema").addEventListener("click", function() {
+  state.showEMA = !state.showEMA;
+  this.classList.toggle("on", state.showEMA);
+  if (state.candles.length) renderCharts();
+});
+document.getElementById("toggle-bb").addEventListener("click", function() {
+  state.showBB = !state.showBB;
+  this.classList.toggle("on", state.showBB);
+  if (state.candles.length) renderCharts();
+});
+document.getElementById("toggle-sr").addEventListener("click", function() {
+  state.showSR = !state.showSR;
+  this.classList.toggle("on", state.showSR);
+  if (state.candles.length) renderCharts();
+});
+
+// Search
+document.getElementById("search").addEventListener("input", renderSidebar);
+
+// Reload
+document.getElementById("reload-btn").addEventListener("click", () => {
+  if (state.asset) loadAsset(state.asset, state.interval);
+});
+
+// Auto-refresh ticker every 30s
+setInterval(() => { if (state.asset) fetchTicker(state.asset); }, 30000);
+
+/* ═══════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════ */
+initCharts();
+renderSidebar();
+
+// Select first asset
+const firstAsset = ASSETS.crypto[0];
+selectAsset(firstAsset);
+</script>
+</body>
+</html>
