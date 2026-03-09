@@ -190,23 +190,25 @@ app.get("/api/multi-ticker", async (req, res) => {
   res.json({ ok: true, results });
 });
 
-// POST /api/ai-analyze  — proxy to Anthropic
+// POST /api/ai-analyze  — proxy to Gemini
 app.post("/api/ai-analyze", async (req, res) => {
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) return res.status(500).json({ ok:false, error:"ANTHROPIC_API_KEY not set" });
+  const GEMINI_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_KEY) return res.status(500).json({ ok:false, error:"GEMINI_API_KEY not set" });
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const { prompt } = req.body;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+    const r = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "x-api-key":     ANTHROPIC_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(req.body),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
+      }),
     });
     const data = await r.json();
-    res.status(r.status).json(data);
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    res.json({ ok: true, text });
   } catch(e) {
     res.status(500).json({ ok:false, error: e.message });
   }
